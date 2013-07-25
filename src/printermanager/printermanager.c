@@ -11,7 +11,7 @@
 #include <sys/select.h>
 #include <dirent.h>
 
-//#define ENABLE_B300_HACK 1
+//#define ENABLE_B300_HACK 1 /* see: http://www.panix.com/~grante/files/arbitrary-baud.c for termios2 usage */
 #define DEFAULT_TO_115K2 1
 
 #include <linux/serial.h>
@@ -19,8 +19,7 @@
 # include <sys/ioctl.h>
 # include <termios.h>
 #else
-# include <asm/ioctls.h>
-# include <asm/termios.h>
+#include <linux/termios.h>
 #endif
 
 #define BASE_PATH "/tmp/UltiFi"
