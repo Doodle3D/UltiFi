@@ -1,0 +1,9 @@
+PRINTERMANAGER_PATH := printermanager
+
+.PHONY: $(PRINTERMANAGER_PATH)
+
+all:
+	$(MAKE) -C $(PRINTERMANAGER_PATH)
+
+clean:
+	$(MAKE) -C $(PRINTERMANAGER_PATH) clean
