@@ -11,9 +11,17 @@
 #include <sys/select.h>
 #include <dirent.h>
 
+//#define ENABLE_B300_HACK 1
+#define DEFAULT_TO_115K2 1
+
 #include <linux/serial.h>
-#include <sys/ioctl.h>
-#include <termios.h>
+#ifdef ENABLE_B300_HACK
+# include <sys/ioctl.h>
+# include <termios.h>
+#else
+# include <asm/ioctls.h>
+# include <asm/termios.h>
+#endif
 
 #define BASE_PATH "/tmp/UltiFi"
 
@@ -185,10 +193,19 @@ void checkActionDirectory()
 
 void setSerialSpeed(int speed)
 {
+#ifdef ENABLE_B300_HACK
 	struct termios options;
+#else
+	struct termios2 options;
+#endif
 	int modemBits;
 
+#ifdef ENABLE_B300_HACK
 	tcgetattr(serialfd, &options);
+#else
+	ioctl(serialfd, TCGETS2, &options);
+#endif
+
 	cfmakeraw(&options);
 
 	// Enable the receiver
@@ -215,15 +232,25 @@ void setSerialSpeed(int speed)
 		cfsetospeed(&options, B115200);
 		break;
 	case 250000:
+#ifdef ENABLE_B300_HACK
 		//Hacked the kernel to see B300 as 250000
 		cfsetispeed(&options, B300);
 		cfsetospeed(&options, B300);
+#else
+		options.c_ospeed = options.c_ispeed = 250000;
+		options.c_cflag &= ~CBAUD;
+		options.c_cflag |= BOTHER;
+#endif
 		break;
 	}
 	options.c_cflag |= CS8;
 	options.c_cflag |= CLOCAL;
 
+#ifdef ENABLE_B300_HACK
 	tcsetattr(serialfd, TCSANOW, &options);
+#else
+	ioctl(serialfd, TCSETS2, &options);
+#endif
 
 	ioctl(serialfd, TIOCMGET, &modemBits);
 	modemBits |= TIOCM_DTR;
@@ -257,7 +284,13 @@ int main(int argc, char** argv)
 	//system(lineBuffer);
 
 	serialfd = open(portName, O_RDWR);
+#ifndef DEFAULT_TO_115K2
+	printf("Setting port speed to 250000\n");
 	setSerialSpeed(250000);
+#else
+	printf("Setting port speed to 115200\n");
+	setSerialSpeed(115200);
+#endif
 
 	printf("Start\n");
 	while(1)
@@ -307,8 +340,13 @@ int main(int argc, char** argv)
 				}else{
 					if (tryAlternativeSpeed)
 					{
+#ifndef DEFAULT_TO_115K2
 						printf("Trying 115200\n");
 						setSerialSpeed(115200);
+#else
+						printf("Trying 250000\n");
+						setSerialSpeed(250000);
+#endif
 						lineBufferPos = 0;
 						tryAlternativeSpeed = 0;
 						tempRecieveTimeout = 20;
@@ -325,8 +363,10 @@ int main(int argc, char** argv)
 			if (fgets(sendLine, sizeof(sendLine), commandFile) != NULL)
 			{
 				write(serialfd, sendLine, strlen(sendLine));
+				printf("---writing: '%s'\n", sendLine);
 			}else{
 				write(serialfd, "\n", 1);
+				printf("---writing newline\n");
 				fclose(commandFile);
 				unlink(commandFilename);
 				commandFile = NULL;

@@ -5,7 +5,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME := ultifi
 PKG_VERSION := 0.1.0
-PKG_RELEASE := 1
+PKG_RELEASE := 4
 
 PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 
@@ -62,8 +62,14 @@ define Package/ultifi/install
 	$(CP) $(ULTIFI_BASE_DIR)/www/* $(1)/$(TGT_DIR_SUFFIX)/www/
 endef
 
+define Package/ultifi/postinst
+if [ -z "$IPKG_INSTROOT" ]; then
+	/etc/init.d/ultifi enable
+fi
+endef
+
 define Package/ultifi/prerm
-if [ -z "$$IPKG_INSTROOT" ]; then
+if [ -z "$IPKG_INSTROOT" ]; then
 	/etc/init.d/ultifi disable
 fi
 endef
