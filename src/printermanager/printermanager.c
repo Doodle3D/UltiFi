@@ -12,7 +12,7 @@
 #include <dirent.h>
 
 //#define ENABLE_B300_HACK 1 /* see: http://www.panix.com/~grante/files/arbitrary-baud.c for termios2 usage */
-//#define DEFAULT_TO_115K2 1
+#define DEFAULT_TO_115K2 1
 
 #include <linux/serial.h>
 #ifdef ENABLE_B300_HACK
@@ -45,6 +45,11 @@ FILE* startLog = NULL;
 /* GCode streaming code */
 FILE* gcodeFile = NULL;
 int gcodeLineNr;
+
+void sendSingleLine(const char* gcode) {
+	printf("about to send: '%s'\n", gcode);
+	write(serialfd, gcode, strlen(gcode));
+}
 
 void sendGCodeLineWithChecksum(const char* gcode)
 {
@@ -80,7 +85,7 @@ void sendNextGCodeLine()
 		c[0] = '\0';
 		c--;
 	}
-
+	printf("gcode %03ib: '%s'\n", strlen(lineBuffer), lineBuffer); //TEMP
 	if (lineBuffer[0] == '\0')
 		sendNextGCodeLine();
 	else
@@ -162,7 +167,7 @@ void parseLine(const char* line)
 	}
 	if (strcmp(line, "echo:SD card ok") == 0)
 	{
-		write(serialfd, "M20\n", 5);
+		sendSingleLine("M20\n");
 		return;
 	}
 	if (strcmp(line, "Begin file list") == 0)
@@ -331,7 +336,7 @@ int main(int argc, char** argv)
 				temperatureCheckDelay--;
 			}else{
 				temperatureCheckDelay = 100;
-				write(serialfd, "M105\nM27\n", 9);
+				sendSingleLine("M105\nM27\n");
 				if (tempRecieveTimeout)
 				{
 					tempRecieveTimeout--;
@@ -349,7 +354,7 @@ int main(int argc, char** argv)
 						tryAlternativeSpeed = 0;
 						tempRecieveTimeout = 20;
 					}else{
-						printf("Failed to conect\n");
+						printf("Failed to connect\n");
 						break;
 					}
 				}
@@ -365,7 +370,7 @@ int main(int argc, char** argv)
 					printf("sending '%s'\n",sendLine+sizeof("SENDFILE="));
 					startCodeFile(sendLine+sizeof("SENDFILE=")); //remaining characters after (SENDFILE=
 				} else {
-					write(serialfd, sendLine, strlen(sendLine));
+					sendSingleLine(sendLine);
 				}
 
 				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
@@ -375,7 +380,7 @@ int main(int argc, char** argv)
 				}
 
 			}else{
-				write(serialfd, "\n", 1);
+				sendSingleLine("\n");
 				fclose(commandFile);
 				unlink(commandFilename);
 				commandFile = NULL;
