@@ -1,9 +1,12 @@
 UltiFi
 ======
-Remote control for Ultimaker (and probably other Marlin compatible 3D printers) that can run on a router running OpenWRT. 
-Target: Files that should be on the box
-  contains a "ManageConnection.bin" that handles the connection to the printer,
-  a simple web interface for some basic printer control,
-  and some files to connect it all
-PrinterManagerSrc: source of that ManageConnection.bin file
-OpenWRT: OpenWRT images (binaries)
+Remote control for Ultimaker (and probably other Marlin compatible 3D printers) that can run on a router running OpenWRT.
+
+Installation
+------------
+
+It has been designed as a package that can be built and installed automatically by the OpenWRT build system. By default a printserver will be installed which automatically runs on startup, continuously monitors (newly) connected printers and provides a simple method to interface with them.
+
+A good starting point to build the package can be found here: <http://wiki.openwrt.org/doc/devel/feeds>. After OpenWRT is aware of the package (i.e., the feed script has 'installed' it), it can be built by running `make package/ultifi/compile` in the OpenWRT build root. Note however, that this only works after the package has been selected in the system configuration (e.g. through `make menuconfig`).
+
+When selected as a module, the .ipk package can be found under 'bin/<arch>/packages/ultifi_<version>_<arch>.ipk'. After uploading it to a compatible OpenWRT device, this can be installed using 'opkg'.

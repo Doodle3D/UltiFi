@@ -1,0 +1,13 @@
+# Ultimaker UltiFi configuration
+#menu "Configuration"
+#	depends on PACKAGE_ultifi
+
+	config ULTIFI_WEB_INTERFACE
+		depends on PACKAGE_ultifi
+		bool "Enable the UltiFi web interface"
+		default n
+		help
+			Install images and scripts for the web interface and create the required
+			symbolic links in the /www directory.
+
+#endmenu
