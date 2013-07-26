@@ -35,7 +35,7 @@ define Build/Configure
 endef
 
 define Build/Compile directives
-#	no compilation necessary (although possible with luac?)
+#	no compilation necessary
 endef
 
 ULTIFI_BASE_DIR := $(PKG_BUILD_DIR)
@@ -60,6 +60,10 @@ define Package/ultifi/install
 	$(INSTALL_BIN) $(PRINTERMANAGER_BASE_DIR)/ManageConnection.bin $(1)/$(TGT_DIR_SUFFIX)
 
 	$(CP) $(ULTIFI_BASE_DIR)/www/* $(1)/$(TGT_DIR_SUFFIX)/www/
+
+	#$(LN) -s /$(TGT_DIR_SUFFIX)/www/index.html $(1)/www/ultifi.html
+	#$(LN) -s /$(TGT_DIR_SUFFIX)/www/UltiFi-static $(1)/www
+	#$(LN) -s /$(TGT_DIR_SUFFIX)/www/cgi-bin/UltiFi $(1)/www/cgi-bin
 endef
 
 define Package/ultifi/postinst
