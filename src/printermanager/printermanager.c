@@ -12,12 +12,12 @@
 #include <dirent.h>
 
 //#define ENABLE_B300_HACK 1 /* see: http://www.panix.com/~grante/files/arbitrary-baud.c for termios2 usage */
-#define DEFAULT_TO_115K2 1
+//#define DEFAULT_TO_115K2 1
 
 #include <linux/serial.h>
 #ifdef ENABLE_B300_HACK
-# include <sys/ioctl.h>
-# include <termios.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #else
 #include <linux/termios.h>
 #endif
@@ -37,7 +37,6 @@ char sdlistFilename[128];
 char endstopFilename[128];
 char printProgressFilename[128];
 char commandFilename[128];
-char gcodeFilename[128];
 char startLogFilename[128];
 FILE* commandFile = NULL;
 FILE* sdlistFile = NULL;
@@ -69,6 +68,7 @@ void sendNextGCodeLine()
 	{
 		fclose(gcodeFile);
 		gcodeFile = NULL;
+		printf("finished GCode file");
 		return;
 	}
 	c = strchr(lineBuffer, ';');
@@ -80,6 +80,7 @@ void sendNextGCodeLine()
 		c[0] = '\0';
 		c--;
 	}
+
 	if (lineBuffer[0] == '\0')
 		sendNextGCodeLine();
 	else
@@ -88,13 +89,13 @@ void sendNextGCodeLine()
 
 void startCodeFile(const char* filename)
 {
-	int i;
+	//int i;
 	gcodeFile = fopen(filename, "r");
 	if (gcodeFile == NULL)
 		return;
 	gcodeLineNr = 0;
 	sendGCodeLineWithChecksum("M110");
-	for(i=0;i<6;i++)
+	//for(i=0;i<6;i++)
 		sendNextGCodeLine();
 }
 
@@ -186,8 +187,6 @@ void checkActionDirectory()
 {
 	if (commandFile == NULL)
 		commandFile = fopen(commandFilename, "rb");
-	if (gcodeFile == NULL)
-		startCodeFile(gcodeFilename);
 }
 
 void setSerialSpeed(int speed)
@@ -268,6 +267,7 @@ int main(int argc, char** argv)
 
 	if (portName == NULL)
 		portName = "/dev/ttyACM0";
+
 	sprintf(basePath, "%s/%s", BASE_PATH, strrchr(portName, '/') + 1);
 	mkdir(BASE_PATH, 0777);
 	mkdir(basePath, 0777);
@@ -277,7 +277,6 @@ int main(int argc, char** argv)
 	sprintf(printProgressFilename, "%s/progress.out", basePath);
 	sprintf(commandFilename, "%s/command.in", basePath);
 	sprintf(startLogFilename, "%s/startup.out", basePath);
-	sprintf(gcodeFilename, "%s/gcode.in", basePath);
 
 	//sprintf(lineBuffer, "stty -F %s raw 115200 -echo -hupcl", portName);
 	//system(lineBuffer);
@@ -361,11 +360,22 @@ int main(int argc, char** argv)
 			char sendLine[1024];
 			if (fgets(sendLine, sizeof(sendLine), commandFile) != NULL)
 			{
-				write(serialfd, sendLine, strlen(sendLine));
-				printf("---writing: '%s'\n", sendLine);
+				if (strstr(sendLine, "(SENDFILE=") == sendLine) { //ptr==.ptr
+					if (sendLine[strlen(sendLine)-1]==10) sendLine[strlen(sendLine)-1] = 0; //recplace LF by \0
+					printf("sending '%s'\n",sendLine+sizeof("SENDFILE="));
+					startCodeFile(sendLine+sizeof("SENDFILE=")); //remaining characters after (SENDFILE=
+				} else {
+					write(serialfd, sendLine, strlen(sendLine));
+				}
+
+				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
+					fclose(gcodeFile);
+					gcodeFile = NULL;
+					printf("finished GCode file");
+				}
+
 			}else{
 				write(serialfd, "\n", 1);
-				printf("---writing newline\n");
 				fclose(commandFile);
 				unlink(commandFilename);
 				commandFile = NULL;
