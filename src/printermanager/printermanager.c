@@ -36,6 +36,7 @@ char temperatureFilename[128];
 char sdlistFilename[128];
 char endstopFilename[128];
 char printProgressFilename[128];
+char printProgress2Filename[128];
 char commandFilename[128];
 char startLogFilename[128];
 FILE* commandFile = NULL;
@@ -45,6 +46,7 @@ FILE* startLog = NULL;
 /* GCode streaming code */
 FILE* gcodeFile = NULL;
 int gcodeLineNr;
+int gcodeNumLines;
 
 void sendGCodeLineWithChecksum(const char* gcode)
 {
@@ -58,6 +60,10 @@ void sendGCodeLineWithChecksum(const char* gcode)
 	printf("GCODE: %s", buffer);
 	write(serialfd, buffer, strlen(buffer));
 	gcodeLineNr++;
+
+	FILE* printProgress2File = fopen(printProgress2Filename, "w");
+	fprintf(printProgress2File, "%d/%d\n", gcodeLineNr,gcodeNumLines);
+	fclose(printProgress2File);
 }
 
 void sendNextGCodeLine()
@@ -66,9 +72,7 @@ void sendNextGCodeLine()
 	char* c;
 	if (!fgets(lineBuffer, sizeof(lineBuffer), gcodeFile))
 	{
-		fclose(gcodeFile);
-		gcodeFile = NULL;
-		printf("finished GCode file");
+		cancelCodeFile();
 		return;
 	}
 	c = strchr(lineBuffer, ';');
@@ -94,9 +98,39 @@ void startCodeFile(const char* filename)
 	if (gcodeFile == NULL)
 		return;
 	gcodeLineNr = 0;
+
+	gcodeNumLines = getNumLines(gcodeFile);
+	printf("  gcodeNumLines: %d\n", gcodeNumLines);
+
 	sendGCodeLineWithChecksum("M110");
 	//for(i=0;i<6;i++)
 		sendNextGCodeLine();
+}
+
+int getNumLines(fileName) {
+	int ch, numLines = 0;
+	do {
+	    ch = fgetc(fileName);
+	    if(ch == '\n')
+	    	numLines++;
+	} while (ch != EOF);
+	// last line doesn't end with a new line!
+	// but there has to be a line at least before the last line
+	if(ch != '\n' && numLines != 0) 
+	    numLines++;
+	
+	fseek(fileName, 0, SEEK_SET);
+	return numLines;
+}
+
+void cancelCodeFile() {
+	if(gcodeFile != NULL) fclose(gcodeFile);
+	gcodeFile = NULL;
+	printf("finished GCode file");
+
+	FILE* printProgress2File = fopen(printProgress2Filename, "w");
+	fprintf(printProgress2File, "");
+	fclose(printProgress2File);
 }
 
 void parseLine(const char* line)
@@ -260,6 +294,8 @@ void setSerialSpeed(int speed)
 
 int main(int argc, char** argv)
 {
+	printf("Main 9/8/2013 18:23\n");
+
 	const char* portName = NULL;
 
 	if (argc > 1)
@@ -275,6 +311,7 @@ int main(int argc, char** argv)
 	sprintf(sdlistFilename, "%s/sdlist.out", basePath);
 	sprintf(endstopFilename, "%s/endstop.out", basePath);
 	sprintf(printProgressFilename, "%s/progress.out", basePath);
+	sprintf(printProgress2Filename, "%s/progress2.out", basePath);
 	sprintf(commandFilename, "%s/command.in", basePath);
 	sprintf(startLogFilename, "%s/startup.out", basePath);
 
@@ -369,9 +406,7 @@ int main(int argc, char** argv)
 				}
 
 				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
-					if(gcodeFile != NULL) fclose(gcodeFile);
-					gcodeFile = NULL;
-					printf("finished GCode file");
+					cancelCodeFile();
 				}
 
 			}else{
