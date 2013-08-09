@@ -369,7 +369,7 @@ int main(int argc, char** argv)
 				}
 
 				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
-					fclose(gcodeFile);
+					if(gcodeFile != NULL) fclose(gcodeFile);
 					gcodeFile = NULL;
 					printf("finished GCode file");
 				}
