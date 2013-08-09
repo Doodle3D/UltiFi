@@ -54,14 +54,14 @@ enum LOG_LEVELS {
 	BULK = 4
 };
 
-int serverLogLevel = QUIET;
+int serverLogLevel = BULK;
 FILE* serverLogFile = NULL;
 
 /* GCode streaming code */
 FILE* gcodeFile = NULL;
 int gcodeLineNr;
 
-void log(int level, const char* format, ...) {
+void logger(int level, const char* format, ...) {
 	va_list args;
 	time_t ltime;
 	struct tm* now;
@@ -78,7 +78,7 @@ void log(int level, const char* format, ...) {
 }
 
 void sendSingleLine(const char* gcode) {
-	log(VERBOSE, "send single line: '%s'\n", gcode);
+	logger(VERBOSE, "send single line: '%s'\n", gcode);
 	write(serialfd, gcode, strlen(gcode));
 }
 
@@ -91,7 +91,7 @@ void sendGCodeLineWithChecksum(const char* gcode)
 	while(buffer[n])
 		checksum ^= buffer[n++];
 	sprintf(buffer, "N%d%s*%d\n", gcodeLineNr, gcode, checksum);
-	log(BULK, "GCODE: %s", buffer);
+	logger(BULK, "GCODE: %s", buffer);
 	write(serialfd, buffer, strlen(buffer));
 	gcodeLineNr++;
 }
@@ -104,7 +104,7 @@ void sendNextGCodeLine()
 	{
 		fclose(gcodeFile);
 		gcodeFile = NULL;
-		log(INFO, "finished GCode file");
+		logger(INFO, "finished GCode file");
 		return;
 	}
 	c = strchr(lineBuffer, ';');
@@ -116,7 +116,7 @@ void sendNextGCodeLine()
 		c[0] = '\0';
 		c--;
 	}
-	//log(BULK, "gcode %03ib: '%s'\n", strlen(lineBuffer), lineBuffer); //TEMP
+	//logger(BULK, "gcode %03ib: '%s'\n", strlen(lineBuffer), lineBuffer); //TEMP
 	if (lineBuffer[0] == '\0')
 		sendNextGCodeLine();
 	else
@@ -137,7 +137,7 @@ void startCodeFile(const char* filename)
 
 void parseLine(const char* line)
 {
-	log(INFO, "|%s|\n", line);
+	logger(INFO, "|%s|\n", line);
 	if (strstr(line, "Resend:"))
 	{
 		gcodeLineNr = atoi(strstr(line, "Resend:") + 7);
@@ -324,14 +324,14 @@ int main(int argc, char** argv)
 
 	serialfd = open(portName, O_RDWR);
 #ifndef DEFAULT_TO_115K2
-	log(INFO, "Setting port speed to 250000\n");
+	logger(INFO, "Setting port speed to 250000\n");
 	setSerialSpeed(250000);
 #else
-	log(LOG, "Setting port speed to 115200\n");
+	logger(LOG, "Setting port speed to 115200\n");
 	setSerialSpeed(115200);
 #endif
 
-	log(INFO, "Start\n");
+	logger(INFO, "Start\n");
 	while(1)
 	{
 		fd_set fdset;
@@ -348,7 +348,7 @@ int main(int argc, char** argv)
 			int len = read(serialfd, lineBuffer + lineBufferPos, sizeof(lineBuffer) - lineBufferPos - 1);
 			if (len < 1)
 			{
-				log(INFO, "Connection closed.\n");
+				logger(INFO, "Connection closed.\n");
 				break;
 			}
 			lineBufferPos += len;
@@ -380,17 +380,17 @@ int main(int argc, char** argv)
 					if (tryAlternativeSpeed)
 					{
 #ifndef DEFAULT_TO_115K2
-						log(INFO, "Trying 115200\n");
+						logger(INFO, "Trying 115200\n");
 						setSerialSpeed(115200);
 #else
-						log(INFO, "Trying 250000\n");
+						logger(INFO, "Trying 250000\n");
 						setSerialSpeed(250000);
 #endif
 						lineBufferPos = 0;
 						tryAlternativeSpeed = 0;
 						tempRecieveTimeout = 20;
 					}else{
-						log(WARNING, "Failed to connect\n");
+						logger(WARNING, "Failed to connect\n");
 						break;
 					}
 				}
@@ -403,7 +403,7 @@ int main(int argc, char** argv)
 			{
 				if (strstr(sendLine, "(SENDFILE=") == sendLine) { //ptr==.ptr
 					if (sendLine[strlen(sendLine)-1]==10) sendLine[strlen(sendLine)-1] = 0; //recplace LF by \0
-					log(INFO, "sending '%s'\n",sendLine+sizeof("SENDFILE="));
+					logger(INFO, "sending '%s'\n",sendLine+sizeof("SENDFILE="));
 					startCodeFile(sendLine+sizeof("SENDFILE=")); //remaining characters after (SENDFILE=
 				} else {
 					sendSingleLine(sendLine);
@@ -412,7 +412,7 @@ int main(int argc, char** argv)
 				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
 					fclose(gcodeFile);
 					gcodeFile = NULL;
-					log(INFO, "cancelled GCode file");
+					logger(INFO, "cancelled GCode file");
 				}
 
 			}else{
