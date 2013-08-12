@@ -4,7 +4,9 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
+#include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -39,14 +41,48 @@ char printProgressFilename[128];
 char printProgress2Filename[128];
 char commandFilename[128];
 char startLogFilename[128];
+//char serverLogFilename[128];
 FILE* commandFile = NULL;
 FILE* sdlistFile = NULL;
 FILE* startLog = NULL;
+
+enum LOG_LEVELS {
+	QUIET = -1,
+	ERROR = 0,
+	WARNING = 1,
+	INFO = 2,
+	VERBOSE = 3,
+	BULK = 4
+};
+
+int serverLogLevel = WARNING; //default value, this is probably overridden in main()
+FILE* serverLogFile = NULL;
 
 /* GCode streaming code */
 FILE* gcodeFile = NULL;
 int gcodeLineNr;
 int gcodeNumLines;
+
+void logger(int level, const char* format, ...) {
+	va_list args;
+	time_t ltime;
+	struct tm* now;
+
+	if (!serverLogFile || level > serverLogLevel) return;
+
+	ltime = time(NULL);
+	now = localtime(&ltime);
+	fprintf(serverLogFile, "%02i-%02i %02i:%02i:%02i  ",now->tm_mday, now->tm_mon + 1, now->tm_hour, now->tm_min, now->tm_sec);
+
+	va_start(args, format);
+	vfprintf(serverLogFile, format, args);
+	va_end(args);
+}
+
+void sendSingleLine(const char* gcode) {
+	logger(VERBOSE, "send single line: '%s'\n", gcode);
+	write(serialfd, gcode, strlen(gcode));
+}
 
 void sendGCodeLineWithChecksum(const char* gcode)
 {
@@ -57,7 +93,7 @@ void sendGCodeLineWithChecksum(const char* gcode)
 	while(buffer[n])
 		checksum ^= buffer[n++];
 	sprintf(buffer, "N%d%s*%d\n", gcodeLineNr, gcode, checksum);
-	printf("GCODE: %s", buffer);
+	logger(BULK, "GCODE: %s", buffer);
 	write(serialfd, buffer, strlen(buffer));
 	gcodeLineNr++;
 
@@ -84,7 +120,7 @@ void sendNextGCodeLine()
 		c[0] = '\0';
 		c--;
 	}
-
+	//logger(BULK, "gcode %03ib: '%s'\n", strlen(lineBuffer), lineBuffer); //TEMP
 	if (lineBuffer[0] == '\0')
 		sendNextGCodeLine();
 	else
@@ -135,7 +171,7 @@ void cancelCodeFile() {
 
 void parseLine(const char* line)
 {
-	printf("|%s|\n", line);
+	logger(INFO, "|%s|\n", line);
 	if (strstr(line, "Resend:"))
 	{
 		gcodeLineNr = atoi(strstr(line, "Resend:") + 7);
@@ -196,7 +232,7 @@ void parseLine(const char* line)
 	}
 	if (strcmp(line, "echo:SD card ok") == 0)
 	{
-		write(serialfd, "M20\n", 5);
+		sendSingleLine("M20\n");
 		return;
 	}
 	if (strcmp(line, "Begin file list") == 0)
@@ -294,8 +330,6 @@ void setSerialSpeed(int speed)
 
 int main(int argc, char** argv)
 {
-	printf("Main 9/8/2013 18:23\n");
-
 	const char* portName = NULL;
 
 	if (argc > 1)
@@ -314,20 +348,25 @@ int main(int argc, char** argv)
 	sprintf(printProgress2Filename, "%s/progress2.out", basePath);
 	sprintf(commandFilename, "%s/command.in", basePath);
 	sprintf(startLogFilename, "%s/startup.out", basePath);
+	//sprintf(serverLogFilename, "%s/server.log", basePath);
 
 	//sprintf(lineBuffer, "stty -F %s raw 115200 -echo -hupcl", portName);
 	//system(lineBuffer);
 
+	//setup logger
+	serverLogLevel = BULK;
+	serverLogFile = stderr;
+
 	serialfd = open(portName, O_RDWR);
 #ifndef DEFAULT_TO_115K2
-	printf("Setting port speed to 250000\n");
+	logger(INFO, "Setting port speed to 250000\n");
 	setSerialSpeed(250000);
 #else
-	printf("Setting port speed to 115200\n");
+	logger(INFO, "Setting port speed to 115200\n");
 	setSerialSpeed(115200);
 #endif
 
-	printf("Start\n");
+	logger(INFO, "Start\n");
 	while(1)
 	{
 		fd_set fdset;
@@ -344,7 +383,7 @@ int main(int argc, char** argv)
 			int len = read(serialfd, lineBuffer + lineBufferPos, sizeof(lineBuffer) - lineBufferPos - 1);
 			if (len < 1)
 			{
-				printf("Connection closed.\n");
+				logger(INFO, "Connection closed.\n");
 				break;
 			}
 			lineBufferPos += len;
@@ -368,7 +407,7 @@ int main(int argc, char** argv)
 				temperatureCheckDelay--;
 			}else{
 				temperatureCheckDelay = 100;
-				write(serialfd, "M105\nM27\n", 9);
+				sendSingleLine("M105\nM27\n");
 				if (tempRecieveTimeout)
 				{
 					tempRecieveTimeout--;
@@ -376,17 +415,17 @@ int main(int argc, char** argv)
 					if (tryAlternativeSpeed)
 					{
 #ifndef DEFAULT_TO_115K2
-						printf("Trying 115200\n");
+						logger(INFO, "Trying 115200\n");
 						setSerialSpeed(115200);
 #else
-						printf("Trying 250000\n");
+						logger(INFO, "Trying 250000\n");
 						setSerialSpeed(250000);
 #endif
 						lineBufferPos = 0;
 						tryAlternativeSpeed = 0;
 						tempRecieveTimeout = 20;
 					}else{
-						printf("Failed to conect\n");
+						logger(WARNING, "Failed to connect\n");
 						break;
 					}
 				}
@@ -399,18 +438,20 @@ int main(int argc, char** argv)
 			{
 				if (strstr(sendLine, "(SENDFILE=") == sendLine) { //ptr==.ptr
 					if (sendLine[strlen(sendLine)-1]==10) sendLine[strlen(sendLine)-1] = 0; //recplace LF by \0
-					printf("sending '%s'\n",sendLine+sizeof("SENDFILE="));
+					logger(INFO, "sending '%s'\n",sendLine+sizeof("SENDFILE="));
 					startCodeFile(sendLine+sizeof("SENDFILE=")); //remaining characters after (SENDFILE=
 				} else {
-					write(serialfd, sendLine, strlen(sendLine));
+					sendSingleLine(sendLine);
 				}
 
 				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
-					cancelCodeFile();
+					fclose(gcodeFile);
+					gcodeFile = NULL;
+					logger(INFO, "cancelled GCode file");
 				}
 
 			}else{
-				write(serialfd, "\n", 1);
+				sendSingleLine("\n");
 				fclose(commandFile);
 				unlink(commandFilename);
 				commandFile = NULL;
