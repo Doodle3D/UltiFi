@@ -54,7 +54,7 @@ enum LOG_LEVELS {
 	BULK = 4
 };
 
-int serverLogLevel = BULK;
+int serverLogLevel = WARNING; //default value, this is probably overridden in main()
 FILE* serverLogFile = NULL;
 
 /* GCode streaming code */
@@ -66,11 +66,11 @@ void logger(int level, const char* format, ...) {
 	time_t ltime;
 	struct tm* now;
 
-	if (!serverLogFile || level <= serverLogLevel) return;
+	if (!serverLogFile || level > serverLogLevel) return;
 
 	ltime = time(NULL);
 	now = localtime(&ltime);
-	printf("%2i-%2i %2i:%2i:%2i  ",now->tm_mday, now->tm_mon + 1, now->tm_hour, now->tm_min, now->tm_sec);
+	fprintf(serverLogFile, "%02i-%02i %02i:%02i:%02i  ",now->tm_mday, now->tm_mon + 1, now->tm_hour, now->tm_min, now->tm_sec);
 
 	va_start(args, format);
 	vfprintf(serverLogFile, format, args);
@@ -327,7 +327,7 @@ int main(int argc, char** argv)
 	logger(INFO, "Setting port speed to 250000\n");
 	setSerialSpeed(250000);
 #else
-	logger(LOG, "Setting port speed to 115200\n");
+	logger(INFO, "Setting port speed to 115200\n");
 	setSerialSpeed(115200);
 #endif
 
