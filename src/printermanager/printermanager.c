@@ -29,8 +29,8 @@
 int lineBufferPos = 0;
 char lineBuffer[1024];
 int serialfd;
-int tempRecieveTimeout = 20;
-int temperatureCheckDelay = 100;
+int tempRecieveTimeout = 2; // how many times is a temperature timeout allowed (after temperature is received this should be more)
+int temperatureCheckDelay = 50;
 int tryAlternativeSpeed = 1;
 
 char basePath[128];
@@ -203,8 +203,11 @@ void parseLine(const char* line)
 		FILE* f = fopen(temperatureFilename, "w");
 		fprintf(f, "%s\n", line);
 		fclose(f);
-		tempRecieveTimeout = 60;
-		temperatureCheckDelay = 20;
+		tempRecieveTimeout = 5;
+
+		// keep checking the temperature while printing, but less frequently
+		if (gcodeFile == NULL) temperatureCheckDelay = 20;
+		else temperatureCheckDelay = 100;
 		return;
 	}
 	if (strstr(line, "SD printing byte "))
@@ -400,18 +403,21 @@ int main(int argc, char** argv)
 			if (lineBufferPos == sizeof(lineBuffer) - 1)
 				lineBufferPos = 0;
 		}else{
-			if (gcodeFile != NULL)
-				temperatureCheckDelay = 50;
-			if (temperatureCheckDelay)
+			if (temperatureCheckDelay > 0)
 			{
 				temperatureCheckDelay--;
-			}else{
+			}
+			else
+			{
 				temperatureCheckDelay = 100;
-				sendSingleLine("M105\nM27\n");
+				sendSingleLine("M105\n");
+				logger(BULK," tempRecieveTimeout: %d\n",tempRecieveTimeout);
 				if (tempRecieveTimeout)
 				{
 					tempRecieveTimeout--;
-				}else{
+				}
+				else
+				{
 					if (tryAlternativeSpeed)
 					{
 #ifndef DEFAULT_TO_115K2
@@ -421,10 +427,13 @@ int main(int argc, char** argv)
 						logger(INFO, "Trying 250000\n");
 						setSerialSpeed(250000);
 #endif
+
 						lineBufferPos = 0;
 						tryAlternativeSpeed = 0;
-						tempRecieveTimeout = 20;
-					}else{
+						tempRecieveTimeout = 5;
+					}
+					else
+					{
 						logger(WARNING, "Failed to connect\n");
 						break;
 					}
@@ -436,21 +445,26 @@ int main(int argc, char** argv)
 			char sendLine[1024];
 			if (fgets(sendLine, sizeof(sendLine), commandFile) != NULL)
 			{
-				if (strstr(sendLine, "(SENDFILE=") == sendLine) { //ptr==.ptr
+				if (strstr(sendLine, "(SENDFILE=") == sendLine) 
+				{ //ptr==.ptr
 					if (sendLine[strlen(sendLine)-1]==10) sendLine[strlen(sendLine)-1] = 0; //recplace LF by \0
 					logger(INFO, "sending '%s'\n",sendLine+sizeof("SENDFILE="));
 					startCodeFile(sendLine+sizeof("SENDFILE=")); //remaining characters after (SENDFILE=
-				} else {
+				} 
+				else 
+				{
 					sendSingleLine(sendLine);
 				}
 
-				if (strstr(sendLine, "(CANCELFILE") == sendLine) { //ptr==.ptr
+				if (strstr(sendLine, "(CANCELFILE") == sendLine) 
+				{ //ptr==.ptr
 					fclose(gcodeFile);
 					gcodeFile = NULL;
-					logger(INFO, "cancelled GCode file");
+					logger(INFO, "cancelled GCode file\n");
 				}
-
-			}else{
+			}
+			else
+			{
 				sendSingleLine("\n");
 				fclose(commandFile);
 				unlink(commandFilename);
