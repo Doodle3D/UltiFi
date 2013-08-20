@@ -32,6 +32,7 @@ int serialfd;
 int tempRecieveTimeout = 2; // how many times is a temperature timeout allowed (after temperature is received this should be more)
 int temperatureCheckDelay = 50;
 int tryAlternativeSpeed = 1;
+int currentSpeed;
 
 char basePath[128];
 char temperatureFilename[128];
@@ -203,7 +204,7 @@ void parseLine(const char* line)
 		FILE* f = fopen(temperatureFilename, "w");
 		fprintf(f, "%s\n", line);
 		fclose(f);
-		tempRecieveTimeout = 5;
+		tempRecieveTimeout = 5; // increase timeout when a temperature is received.
 
 		// keep checking the temperature while printing, but less frequently
 		if (gcodeFile == NULL) temperatureCheckDelay = 20;
@@ -262,8 +263,14 @@ void checkActionDirectory()
 		commandFile = fopen(commandFilename, "rb");
 }
 
+void switchSerialSpeed() {
+	int newSpeed = (currentSpeed == 115200)? 250000 : 115200;
+	setSerialSpeed(newSpeed);
+}
+
 void setSerialSpeed(int speed)
 {
+	logger(INFO, "Trying speed: %d\n",speed);
 #ifdef ENABLE_B300_HACK
 	struct termios options;
 #else
@@ -329,6 +336,8 @@ void setSerialSpeed(int speed)
 	usleep(100 * 1000);
 	modemBits &=~TIOCM_DTR;
 	ioctl(serialfd, TIOCMSET, &modemBits);
+
+	currentSpeed = speed;
 }
 
 int main(int argc, char** argv)
@@ -425,17 +434,11 @@ int main(int argc, char** argv)
 					{
 						if (tryAlternativeSpeed)
 						{
-	#ifndef DEFAULT_TO_115K2
-							logger(INFO, "Trying 115200\n");
-							setSerialSpeed(115200);
-	#else
-							logger(INFO, "Trying 250000\n");
-							setSerialSpeed(250000);
-	#endif
-
+							logger(WARNING, "Failed to connect\n");
+							switchSerialSpeed();
 							lineBufferPos = 0;
-							tryAlternativeSpeed = 0;
-							tempRecieveTimeout = 5;
+							//tryAlternativeSpeed = 0;
+							tempRecieveTimeout = 2;
 						}
 						else
 						{
