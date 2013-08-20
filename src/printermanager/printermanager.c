@@ -383,6 +383,7 @@ int main(int argc, char** argv)
 		select(serialfd + 1, &fdset, NULL, NULL, &timeout);
 		if (FD_ISSET(serialfd, &fdset))
 		{
+			//logger(BULK,"FD_ISSET\n");
 			int len = read(serialfd, lineBuffer + lineBufferPos, sizeof(lineBuffer) - lineBufferPos - 1);
 			if (len < 1)
 			{
@@ -402,46 +403,52 @@ int main(int argc, char** argv)
 			//On buffer overflow clear the buffer (this usually happens on the wrong baudrate)
 			if (lineBufferPos == sizeof(lineBuffer) - 1)
 				lineBufferPos = 0;
-		}else{
-			if (temperatureCheckDelay > 0)
-			{
-				temperatureCheckDelay--;
-			}
-			else
-			{
-				temperatureCheckDelay = 100;
-				sendSingleLine("M105\n");
-				logger(BULK," tempRecieveTimeout: %d\n",tempRecieveTimeout);
-				if (tempRecieveTimeout)
+		}
+		else
+		{
+			//logger(BULK,"no FD_ISSET\n");
+			//if(gcodeFile == NULL) {
+				if (temperatureCheckDelay > 0)
 				{
-					tempRecieveTimeout--;
+					temperatureCheckDelay--;
 				}
 				else
 				{
-					if (tryAlternativeSpeed)
+					temperatureCheckDelay = 100;
+					sendSingleLine("M105\n");
+					logger(BULK," tempRecieveTimeout: %d\n",tempRecieveTimeout);
+					if (tempRecieveTimeout)
 					{
-#ifndef DEFAULT_TO_115K2
-						logger(INFO, "Trying 115200\n");
-						setSerialSpeed(115200);
-#else
-						logger(INFO, "Trying 250000\n");
-						setSerialSpeed(250000);
-#endif
-
-						lineBufferPos = 0;
-						tryAlternativeSpeed = 0;
-						tempRecieveTimeout = 5;
+						tempRecieveTimeout--;
 					}
 					else
 					{
-						logger(WARNING, "Failed to connect\n");
-						break;
+						if (tryAlternativeSpeed)
+						{
+	#ifndef DEFAULT_TO_115K2
+							logger(INFO, "Trying 115200\n");
+							setSerialSpeed(115200);
+	#else
+							logger(INFO, "Trying 250000\n");
+							setSerialSpeed(250000);
+	#endif
+
+							lineBufferPos = 0;
+							tryAlternativeSpeed = 0;
+							tempRecieveTimeout = 5;
+						}
+						else
+						{
+							logger(WARNING, "Failed to connect\n");
+							break;
+						}
 					}
 				}
-			}
+			//}
 		}
 		if (commandFile != NULL)
 		{
+			logger(BULK, "commandFile found\n");
 			char sendLine[1024];
 			if (fgets(sendLine, sizeof(sendLine), commandFile) != NULL)
 			{
@@ -465,7 +472,8 @@ int main(int argc, char** argv)
 			}
 			else
 			{
-				sendSingleLine("\n");
+				logger(BULK, "  commandFile empty\n");
+				//sendSingleLine("\n"); // why would we send a empty line?
 				fclose(commandFile);
 				unlink(commandFilename);
 				commandFile = NULL;
