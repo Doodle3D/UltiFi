@@ -13,7 +13,7 @@ include $(INCLUDE_DIR)/package.mk
 
 define Package/ultifi
 	SECTION:=mods
-	CATEGORY:=Miscellaneous
+	CATEGORY:=Doodle3D
 	MENU:=0
 #	DEFAULT:=y
 	TITLE:=UltiFi 3D printing manager
