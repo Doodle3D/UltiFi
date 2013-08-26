@@ -30,7 +30,7 @@ int lineBufferPos = 0;
 char lineBuffer[1024];
 int serialfd;
 int tempRecieveTimeout = 2; // how many times is a temperature timeout allowed (after temperature is received this should be more)
-int temperatureCheckDelay = 50;
+int temperatureCheckDelay = 30; //50
 int tryAlternativeSpeed = 1;
 int currentSpeed;
 
@@ -369,7 +369,12 @@ int main(int argc, char** argv)
 	serverLogLevel = BULK;
 	serverLogFile = stderr;
 
-	serialfd = open(portName, O_RDWR);
+	serialfd = open(portName, O_RDWR | O_NONBLOCK );
+	if (serialfd == -1)  {
+        logger(ERROR,"Unable to open serial port\n");
+        return -1;
+    }
+
 #ifndef DEFAULT_TO_115K2
 	logger(INFO, "Setting port speed to 250000\n");
 	setSerialSpeed(250000);
@@ -423,7 +428,7 @@ int main(int argc, char** argv)
 				}
 				else
 				{
-					temperatureCheckDelay = 100;
+					temperatureCheckDelay = 30; //100;
 					sendSingleLine("M105\n");
 					logger(BULK," tempRecieveTimeout: %d\n",tempRecieveTimeout);
 					if (tempRecieveTimeout)
@@ -434,8 +439,11 @@ int main(int argc, char** argv)
 					{
 						if (tryAlternativeSpeed)
 						{
-							logger(WARNING, "Failed to connect\n");
+							logger(WARNING, "Failed to connect, let's try different speed\n");
+
 							switchSerialSpeed();
+							logger(BULK, "Connection switched speeds\n");
+
 							lineBufferPos = 0;
 							//tryAlternativeSpeed = 0;
 							tempRecieveTimeout = 2;
