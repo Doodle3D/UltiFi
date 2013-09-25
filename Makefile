@@ -18,7 +18,7 @@ define Package/ultifi
 #	DEFAULT:=y
 	TITLE:=UltiFi 3D printing manager
 	URL:=http://www.doodle3d.com/wifibox
-	DEPENDS:=
+	DEPENDS:=+kmod-usb-acm +kmod-usb-serial +kmod-usb-serial-ftdi
 endef
 
 define Package/ultifi/description
